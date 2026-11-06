@@ -9284,6 +9284,75 @@ var USO_QUIEN = { correo: "", persona: "", rol: "", uid: "" };
   } catch (e) { }
 })();
 
+/* IDENTIDAD FUERA DE LA PLATAFORMA (06/11/2026). Alojado en GitHub Pages el juego
+   ya no puede leer la sesión de UVP Online (otro dominio). Tres vías, en orden:
+   1) la plataforma (o sistemas) manda un postMessage {type:"uvp-identidad", correo, persona, rol, uid};
+   2) lo recordado en este navegador (clave uvp.primerosclics.quien);
+   3) una pregunta única, con opción «Ahora no» (se repite a los 7 días).
+   Solo se activa en github.io: dentro de UVP Online manda el token de la sesión. */
+(function () {
+  var K = "uvp.primerosclics.quien", K_NO = "uvp.primerosclics.quien.no";
+  var RE = /^[^\s@]+@(uvp\.mx|uvp\.edu\.mx)$/i;
+  function lee(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function guarda(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+  function aplica(o) {
+    if (!o || typeof o.correo !== "string" || !RE.test(o.correo.trim())) return false;
+    USO_QUIEN.correo = o.correo.trim().toLowerCase();
+    if (typeof o.persona === "string") USO_QUIEN.persona = o.persona.trim().slice(0, 120);
+    if (typeof o.rol === "string") USO_QUIEN.rol = o.rol.trim().slice(0, 20);
+    if (typeof o.uid === "string") USO_QUIEN.uid = o.uid.trim().slice(0, 80);
+    return true;
+  }
+  try {
+    if (USO_QUIEN.correo || !/github\.io$/i.test(location.hostname)) return;
+    window.addEventListener("message", function (ev) {
+      var d = ev.data;
+      if (d && d.type === "uvp-identidad" && aplica(d)) guarda(K, JSON.stringify(d));
+    });
+    var g = lee(K);
+    if (g) { try { if (aplica(JSON.parse(g))) return; } catch (e) { } }
+    var no = parseInt(lee(K_NO) || "0", 10);
+    if (no && Date.now() - no < 7 * 864e5) return;
+    function pregunta() {
+      if (USO_QUIEN.correo || document.getElementById("uvp-quien")) return;
+      var w = document.createElement("div");
+      w.id = "uvp-quien";
+      w.setAttribute("role", "dialog");
+      w.setAttribute("aria-modal", "true");
+      w.setAttribute("aria-label", "Identificación para el seguimiento de uso");
+      w.style.cssText = "position:fixed;inset:0;z-index:2147483000;background:rgba(20,8,40,.78);display:flex;align-items:center;justify-content:center;padding:16px;font-family:system-ui,Segoe UI,Arial,sans-serif";
+      w.innerHTML =
+        '<div style="background:#fff;color:#1d1230;max-width:420px;width:100%;border-radius:14px;padding:22px;box-shadow:0 12px 40px rgba(0,0,0,.45)">' +
+        '<h2 style="margin:0 0 8px;font-size:20px">Antes de empezar</h2>' +
+        '<p style="margin:0 0 14px;font-size:15px;line-height:1.45">Para que el equipo de Diseño Instruccional sepa quién usa este recurso y pueda ayudarte, escribe tu correo institucional. Solo se usa para el seguimiento de uso.</p>' +
+        '<label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px" for="uvp-q-c">Correo institucional</label>' +
+        '<input id="uvp-q-c" type="email" autocomplete="email" placeholder="nombre@uvp.edu.mx" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid #8a7aa8;border-radius:8px;margin-bottom:10px">' +
+        '<label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px" for="uvp-q-n">Nombre (opcional)</label>' +
+        '<input id="uvp-q-n" type="text" autocomplete="name" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid #8a7aa8;border-radius:8px;margin-bottom:6px">' +
+        '<div id="uvp-q-e" style="color:#b3261e;font-size:13px;min-height:18px;margin-bottom:8px" aria-live="polite"></div>' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+        '<button id="uvp-q-no" type="button" style="padding:10px 14px;font-size:15px;border:1px solid #8a7aa8;background:#fff;border-radius:8px;cursor:pointer">Ahora no</button>' +
+        '<button id="uvp-q-si" type="button" style="padding:10px 16px;font-size:15px;border:0;background:#5b1fa8;color:#fff;border-radius:8px;cursor:pointer;font-weight:600">Continuar</button>' +
+        '</div></div>';
+      document.body.appendChild(w);
+      var c = document.getElementById("uvp-q-c");
+      try { c.focus(); } catch (e) { }
+      function cierra() { try { w.remove(); } catch (e) { } }
+      function envia() {
+        var o = { correo: c.value, persona: document.getElementById("uvp-q-n").value };
+        if (!aplica(o)) { document.getElementById("uvp-q-e").textContent = "Escribe un correo que termine en @uvp.mx o @uvp.edu.mx."; return; }
+        guarda(K, JSON.stringify({ correo: USO_QUIEN.correo, persona: USO_QUIEN.persona }));
+        cierra();
+        try { registraUso("identificado", "", "autodeclarado"); } catch (e) { }
+      }
+      document.getElementById("uvp-q-si").onclick = envia;
+      document.getElementById("uvp-q-no").onclick = function () { guarda(K_NO, String(Date.now())); cierra(); };
+      c.addEventListener("keydown", function (e) { if (e.key === "Enter") envia(); });
+    }
+    if (document.body) pregunta(); else document.addEventListener("DOMContentLoaded", pregunta);
+  } catch (e) { }
+})();
+
 var USO_DISP = (function () {
   try {
     var ch = Math.min(screen.width, screen.height), tactil = matchMedia("(pointer:coarse)").matches;
